@@ -1,0 +1,535 @@
+/** File Name: SendEmail_NT_Stage_1 
+* @description This class is the is used to send emails on load status for IB2B and No show
+* @author : Cognizant Technology Solutions(Offshore)	
+* Modification Log =============================================================== 
+Ver     Date            Author                                          Modification --- ---- ------ -------------
+1.0     13th-Mar-2019   Cognizant Technology Solutions(Offshore)        Original version
+2.0     7-May-20120     Elang Kumaran Chellathurai	 	                PC-347.Refactor the code as per COE practises and Interface new TMS No Show Report with Salesforce PC.  
+**/
+public without sharing class SendEmail_NT_Stage_1 {
+    list<Messaging.SingleEmailMessage> mails = new list<Messaging.SingleEmailMessage>();
+    list<String> emails = new list<String>();
+    
+    /**
+* @description to flush the mails
+*/
+    public void flush() {
+        mails.clear();
+    }
+    /**
+* @description Added as part of PC-347 to get Primary Connect Hierarchy Custom settings    
+* @return PC No Show email users list
+*/
+    public static PC_Primary_Connect_Setting__c getPrimConnHiearchySetting(){
+        return PC_Primary_Connect_Setting__c.getInstance();
+    }
+    /**
+* @description Added as part of PC-347 to get email list of no show end users  
+*/   
+    public void getAddress () {
+        //Added as part of PC-347 to get the valid No Show emails list
+        List<String> noShowEmailList = getPrimConnHiearchySetting().PC_No_Show_Email__c.split(',');
+        
+        for(String noShowEmail: noShowEmailList){
+            emails.add(noShowEmail.trim());
+        }
+        system.debug(emails);
+    }
+    /**
+* @description to get the address of Ib2b users 
+*/  
+    public void getAddressIb2b () {
+        list<contact> ca = [select Email from contact
+                            where Contact_type__c = 'Ib2b_administrator'
+                            and RecordType.Name = 'Contact Record_Internal'];
+        if(!ca.isEmpty()) {
+            for (contact con : ca) {
+                emails.add(string.valueof(con.Email));
+            }
+        } else {
+            emails.add('skrishnan@woolworths.com.au');
+        }
+    }
+    /**
+* @description send email method 
+* @param pmsg
+*/      
+    public void sendEmail(String pmsg) {
+        Messaging.SingleEmailMessage message = new Messaging.SingleEmailMessage();
+        list<String> toadd = new list<String>();
+        toadd.add('nasif@woolworths.com.au');
+        String subject = 'Testing';
+        String plainTextBody = 'Hello this is for testing';
+        PlainTextBody += pmsg;
+        message.setToAddresses(toadd);
+        message.SetSubject(subject);
+        message.SetPlainTextBody(plainTextBody);
+        Messaging.sendEmail(New Messaging.SingleEmailMessage[] {message});
+    }
+    /**
+* @description sendsingleMsg method
+* @param pEmailAdd
+* @param pEmailType
+* @param pSubject
+* @param pMsg
+*/      
+    public void sendSingleMsg(list<String> pEmailAdd, String pEmailType, String pSubject, 
+                              String pMsg) {
+                                  try {
+                                      Messaging.SingleEmailMessage message = new Messaging.SingleEmailMessage();
+                                      message.setToAddresses(pEmailAdd);
+                                      message.SetSubject(pSubject);
+                                      if (pEmailType == 'Plain') {
+                                          message.SetPlainTextBody(pMsg);
+                                      } else if (pEmailType == 'Html') {
+                                          message.setHtmlBody(pMsg);
+                                      } else {
+                                          message.SetPlainTextBody(pMsg);
+                                      }
+                                      mails.add(message);
+                                      Messaging.sendEmail (mails);
+                                      flush();
+                                  } catch (Exception e) {
+                                      sendEmail('sendSingleMsg program didn\'t worked');
+                                      flush();
+                                  }
+                              }
+    
+    //(Integer pSuccessRec, Date pDate, list<Staging_1_Case_NT__c> pErrorRecord)
+    /**
+* @description  onInsertSendmail - method to send insert notification for No Show data
+* @param pDate
+* @param pNum
+* @param pErrorRecs
+*/      
+    public void onInsertSendmail(Date pDate, Integer pNum, list<Staging_1_Case_NT__c> pErrorRecs) {
+        Messaging.SingleEmailMessage message = new Messaging.SingleEmailMessage();
+        getAddress();
+        //list<String> toadd = new list<String>();
+        //toadd.add('nasif@woolworths.com.au');
+        //toadd.add('smontgomery@woolworths.com.au');
+        String subject = 'Insert Notification: National Transport No Show Data Load Status';
+        String plainTextBody = '<html>';
+        plainTextBody += '<head> <style> table, th, td { border: 1px solid black; border-collapse: collapse; } ' +
+            'th, td { padding: 5px; text-align: left; } ' + 
+            '</style> </head>';
+        plainTextBody += '<body>';
+        plainTextBody += 'Dear User,';
+        plainTextBody += '<p> Please find National Transport No Show Data Load Status below: </p>';
+        plainTextBody += '<p> </p><b> Records Successfully Created </b>';
+        plainTextBody += '<p> </p><table style="border: 1px solid black; border-collapse: collapse;"> ';
+        plainTextBody += '<tr>'; 
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b>Data Load Date </b>' + '</th>';
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> Number of Records Created </b>' + '</th>' ;
+        plainTextBody += '</tr>';
+        plainTextBody += '<tr>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(pDate) + '</td>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(pNum) + '</td>';
+        plainTextBody += '</tr>';
+        plainTextBody += '</table>';
+        
+        /*
+        if(!pErrorRecs.isEmpty()) {
+            
+            plainTextBody += '<p> </p>';
+            plainTextBody += '<b> Load Errors </b> <p> </p>';
+            plainTextBody += '<table style="border: 1px solid black; border-collapse: collapse;">';
+            plainTextBody += '<tr> <th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Staging Record Number' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Delivery Date' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'PO Affected' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Account' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'DC Affected' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Replenisher' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Pallets Affected' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Cartons Affected' + '</th>';
+            // PC-347. Added PO Status,Exepcted Pallets,Origin State and removed ARM_Name.
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'PO Status' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Exepcted Pallets' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Origin State' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Error' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Error Msg' + '</th>';
+            plainTextBody += '</tr>';
+            
+            for (Staging_1_Case_NT__c xx : pErrorRecs) {
+                plainTextBody += '<tr>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Name ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Delivery_Date__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PO_Affected__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Account__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.DC_Affected__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Replenisher__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Pallets_Affected__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Cartons_Affected__c ) + '</td>';
+                // PC-347. Added PO Status,Exepcted Pallets,Origin State and removed ARM_Name.
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PC_PO_Status__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PC_Expected_Pallets__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PC_Origin_State__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Error__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Error_Msg__c ) + '</td>';
+                plainTextBody += '</tr>';
+            }
+            plainTextBody += '</table>';
+        } */
+         if(pErrorRecs.isEmpty()) {
+            plainTextBody += '<p> Currently there are zero errors present in system. </p>';
+        }
+        plainTextBody += '<p> All errors will be corrected by IT Support. </p>';
+        plainTextBody += '<p> In the event errors are not corrected, please raise an Servicewow Incident and include the information detailed above. </p>';
+        plainTextBody += '<p> </p> <p> </p> Regards, <P>Cloud Service & Delivery Team</p>';
+        /*
+PlainTextBody += '<p><b>Sally Montgomery </b> </p>';
+PlainTextBody += '<p><i> Cloud Services Solution Lead </i></p>';
+PlainTextBody += '<p><i> BTS Corporate - Cloud Service & Delivery Team </i></p>';
+PlainTextBody += '<p><i> Woolworths Limited </i></p>';
+PlainTextBody += '<p> <b> Phone : - </b> +61 2 8885 2280 </p>';
+PlainTextBody += '<p> <b> Fax : - </b> +61 2 8888 2280 </p>';
+PlainTextBody += '<p> <b> Email : - </b> smontgomery@woolworths.com.au </p>';
+*/
+        plainTextBody += '<body>';
+        plainTextBody += '</html>';
+        
+        //message.setToAddresses(toadd);
+        message.setToAddresses(emails);
+        message.SetSubject(subject);
+        //message.SetPlainTextBody(plainTextBody);
+        message.setHtmlBody(plainTextBody);
+        mails.add(message);
+        Messaging.sendEmail(mails);
+    }
+    public void onInsertSendmail2(String finalstrarg){
+        String attName = 'No Show Cases in error.csv';
+        String subject ='Insert Notification: National Transport No Show Data Load Status';
+        String str0 = 'Dear User,Please find attached National Transport No Show Data Load Status below:';   
+        String str1 ='All errors will be corrected by IT Support';
+        String str2 ='In the event errors are not corrected, please raise an Servicewow Incident and include the information detailed above';              
+        String str3= 'Regards, ';
+        String str4='Cloud Service & Delivery Team';
+        String body = str0 +'\n'+ str1 +'\n'+str2+'\n'+'\n'+str3+'\n'+'\n'+str4;
+        // Define the email
+        Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+        getAddress();
+        // Create the email attachment    
+        Messaging.EmailFileAttachment efa = new Messaging.EmailFileAttachment();
+        efa.setFileName(attName);
+        efa.setBody(Blob.valueOf(finalstrarg));
+        // Set the paramaters to the email object
+        email.setSubject( subject );
+        
+        // Here I am accessing current user email id to whom we are sending email
+        email.setToAddresses(emails);
+        email.setPlainTextBody( body );
+        
+        // Attach file using setFileAttachments function
+        email.setFileAttachments(new Messaging.EmailFileAttachment[] {efa});
+        // Sends the email
+        Messaging.SendEmailResult [] r = 
+            Messaging.sendEmail(new Messaging.SingleEmailMessage[] {email});   
+       
+        
+    }
+    
+    /**
+* @description  onUpdateSendmail - method to send update notification for No Show data
+* @param pDate
+* @param pNum
+* @param pSuccessRec
+* @param pErrorRecs
+*/ 
+  //public void onInsertSendmail(Date pDate, Integer pNum, list<Staging_1_Case_NT__c> pErrorRecs)  
+     public void onUpdateSendmail(Date pDate, Integer pNum, list<Staging_1_Case_NT__c> pSuccessRec, list<Staging_1_Case_NT__c> pErrorRecs) {
+        Messaging.SingleEmailMessage message = new Messaging.SingleEmailMessage();
+        getAddress();
+        //list<String> toadd = new list<String>();
+        //toadd.add('nasif@woolworths.com.au');
+        //toadd.add('smontgomery@woolworths.com.au');
+        String subject = 'Update Notification: National Transport No Show Data Error Correction Status';
+        String plainTextBody = '<html>';
+        plainTextBody += '<head> <style> table, th, td { border: 1px solid black; border-collapse: collapse; } ' +
+            'th, td { padding: 5px; text-align: left; } ' + 
+            '</style> </head>';
+        plainTextBody += '<body>';
+        plainTextBody += 'Dear User,';
+        plainTextBody += '<p> Please find National Transport No Show Data Load Error Correction Status below: </p>';
+        //PlainTextBody += '<p> </p><b> Records Successfully Created </b>';
+        plainTextBody += '<p> </p><b> Records Successfully Created following Error Correction</b>';
+        plainTextBody += '<p> </p><table style="border: 1px solid black; border-collapse: collapse;"> ';
+        plainTextBody += '<tr>'; 
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b>Data Load Date </b>' + '</th>';
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> Number of Records Created </b>' + '</th>' ;
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> Number of Records  </b>' + '</th>' ;
+        plainTextBody += '</tr>';
+        plainTextBody += '<tr>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(pDate) + '</td>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(pNum) + '</td>';
+        plainTextBody += '</tr>';
+        plainTextBody += '</table>';
+        
+        
+        if(!pSuccessRec.isEmpty()) {
+            
+            plainTextBody += '<p> </p>';
+            plainTextBody += '<b> Load Success Records </b> <p> </p>';
+            plainTextBody += '<table style="border: 1px solid black; border-collapse: collapse;">';
+            plainTextBody += '<tr> <th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Staging Record Number' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Delivery Date' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'PO Affected' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Account' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'DC Affected' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Replenisher' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Pallets Affected' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Cartons Affected' + '</th>';
+            // PC-347. Added PO Status,Exepcted Pallets,Origin State and removed ARM_Name.
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'PO Status' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Exepcted Pallets' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Origin State' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Error' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Error Msg' + '</th>';
+            plainTextBody += '</tr>';
+            
+            for (Staging_1_Case_NT__c xx : pSuccessRec) {
+                plainTextBody += '<tr>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Name ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Delivery_Date__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PO_Affected__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Account__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.DC_Affected__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Replenisher__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Pallets_Affected__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Cartons_Affected__c ) + '</td>';
+                // PC-347. Added PO Status,Exepcted Pallets,Origin State and removed ARM_Name.
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PC_PO_Status__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PC_Expected_Pallets__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PC_Origin_State__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Error__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Error_Msg__c ) + '</td>';
+                plainTextBody += '</tr>';
+            }
+            
+            plainTextBody += '</table>';
+        }
+        
+        if(!pErrorRecs.isEmpty()) {
+            
+            plainTextBody += '<p> </p>';
+            plainTextBody += '<b> Remaining Errors </b> <p> </p>';
+            plainTextBody += '<table style="border: 1px solid black; border-collapse: collapse;">';
+            plainTextBody += '<tr> <th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Staging Record Number' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Delivery Date' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'PO Affected' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Account' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'DC Affected' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Replenisher' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Pallets Affected' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Cartons Affected' + '</th>';
+            // PC-347. Added PO Status,Exepcted Pallets,Origin State and removed ARM_Name.
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'PO Status' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Exepcted Pallets' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Origin State' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Error' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Error Msg' + '</th>';
+            plainTextBody += '</tr>';
+            
+            for (Staging_1_Case_NT__c xx : pErrorRecs) {
+                plainTextBody += '<tr>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Name ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Delivery_Date__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PO_Affected__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Account__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.DC_Affected__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Replenisher__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Pallets_Affected__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Cartons_Affected__c ) + '</td>';
+                // PC-347. Added PO Status,Exepcted Pallets,Origin State and removed ARM_Name.
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PC_PO_Status__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PC_Expected_Pallets__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.PC_Origin_State__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Error__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Error_Msg__c ) + '</td>';
+                plainTextBody += '</tr>';
+            }
+            plainTextBody += '</table>';
+        } else {
+            plainTextBody += '<p> Currently there are zero errors present in system. </p>';
+        }
+        plainTextBody += '<p>  All errors will be corrected by IT Support. </p>';
+        plainTextBody += '<p> In the event errors are not corrected, please raise an Servicewow Incident and include the information detailed above. </p>';
+        plainTextBody += '<p> </p> <p> </p> Regards, <P>Cloud Service & Delivery Team</p>';
+        
+        plainTextBody += '<body>';
+        plainTextBody += '</html>';
+        
+        //message.setToAddresses(toadd);
+        message.setToAddresses(emails);
+        message.SetSubject(subject);
+        //message.SetPlainTextBody(PlainTextBody);
+        message.setHtmlBody(plainTextBody);
+        mails.add(message);
+        Messaging.sendEmail(mails);
+    }
+    /**
+* @description  onInsert_Sendmail - method to send insert notification for Ib2b Order
+* @param pDate
+* @param pNum
+* @param peNum
+* @param errorsum
+* @param poNumber
+* @param customerNum
+*/ 
+    public void onInsert_Sendmail(Date pDate, Integer pNum,Integer peNum,  AggregateResult[] errorsum,string poNumber,string customerNum) {
+        Messaging.SingleEmailMessage message = new Messaging.SingleEmailMessage();
+        getAddressIb2b();
+        //list<String> toadd = new list<String>();
+        //toadd.add('nasif@woolworths.com.au');
+        //toadd.add('smontgomery@woolworths.com.au');
+        String subject = 'Insert Notification: IB2B Order Update Status';
+        String plainTextBody = '<html>';
+        plainTextBody += '<head> <style> table, th, td { border: 1px solid black; border-collapse: collapse; } ' +
+            'th, td { padding: 5px; text-align: left; } ' + 
+            '</style> </head>';
+        plainTextBody += '<body>';
+        plainTextBody += 'Dear User,';
+        plainTextBody += '<p> Please find IB2B Order Load Status below: </p>';
+        plainTextBody += '<p> </p><b> Records Successfully Created </b>';
+        plainTextBody += '<p> </p><table style="border: 1px solid black; border-collapse: collapse;"> ';
+        plainTextBody += '<tr>'; 
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> PO Number </b>' + '</th>' ;   
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> Customer Name </b>' + '</th>' ;   
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> Data Load Date </b>' + '</th>';
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> Number of Records Created </b>' + '</th>' ;
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> Number of Records Errored </b>' + '</th>' ;
+        plainTextBody += '</tr>';
+        plainTextBody += '<tr>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(poNumber) + '</td>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(customerNum) + '</td>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(pDate) + '</td>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(pNum) + '</td>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(peNum) + '</td>';
+        //  PlainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;"><a href=https://woolworths-group--wowdev.cs89.my.salesforce.com/>'+string.valueof(POid) + '</td>';
+        plainTextBody += '</tr>';
+        plainTextBody += '</table>';
+        
+        
+        if(!errorsum.isEmpty()) {
+            
+            plainTextBody += '<p> </p>';
+            plainTextBody += '<b> Load Errors </b> <p> </p>';
+            plainTextBody += '<table style="border: 1px solid black; border-collapse: collapse;">';
+            //          PlainTextBody += '<tr> <th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Article' + '</th>';
+            //          PlainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Stock Source' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Error Msg' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'No.of Errors' + '</th>';
+            plainTextBody += '</tr>';
+            
+            for (AggregateResult xx : errorsum) {
+                plainTextBody += '<tr>';
+                //          PlainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Article_Number__c ) + '</td>';
+                //              PlainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Stock_Source__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.get('err') ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +xx.get('a') + '</td>';
+                plainTextBody += '</tr>';
+            }
+            plainTextBody += '</table>';
+        }  else {
+            plainTextBody += '<p> Currently there are zero errors present in system. </p>';
+        }
+        plainTextBody += '<p> All errors will be corrected by IT Support. </p>';
+        plainTextBody += '<p> In the event errors are not corrected, please raise an Servicewow Incident and include the information detailed above. </p>';
+        plainTextBody += '<p> </p> <p> </p> Regards, <P>Cloud Service & Delivery Team</p>';
+        /*
+PlainTextBody += '<p><b>Sally Montgomery </b> </p>';
+PlainTextBody += '<p><i> Cloud Services Solution Lead </i></p>';
+PlainTextBody += '<p><i> BTS Corporate - Cloud Service & Delivery Team </i></p>';
+PlainTextBody += '<p><i> Woolworths Limited </i></p>';
+PlainTextBody += '<p> <b> Phone : - </b> +61 2 8885 2280 </p>';
+PlainTextBody += '<p> <b> Fax : - </b> +61 2 8888 2280 </p>';
+PlainTextBody += '<p> <b> Email : - </b> smontgomery@woolworths.com.au </p>';
+*/
+        plainTextBody += '<body>';
+        plainTextBody += '</html>';
+        
+        //message.SetToAddresses(toadd);
+        message.setToAddresses(emails);
+        message.SetSubject(subject);
+        //message.SetPlainTextBody(PlainTextBody);
+        message.setHtmlBody(plainTextBody);
+        mails.add(message);
+        Messaging.sendEmail(mails);
+    }
+    /**
+* @description  DCloadlist_onInsert_Sendmail - method to send insert notification for DCloadlist
+* @param pDate
+* @param pNum
+* @param peNum
+* @param errorsum
+* @param poNumber
+* @param fileName
+*/ 
+    public void DCloadlist_onInsert_Sendmail(Date pDate, Integer pNum,Integer peNum,  AggregateResult[] errorsum,string poNumber,string fileName) {
+        Messaging.SingleEmailMessage message = new Messaging.SingleEmailMessage();
+        getAddressIb2b();
+        
+        String subject = fileName+' update status for the order '+poNumber;
+        String plainTextBody = '<html>';
+        plainTextBody += '<head> <style> table, th, td { border: 1px solid black; border-collapse: collapse; } ' +
+            'th, td { padding: 5px; text-align: left; } ' + 
+            '</style> </head>';
+        plainTextBody += '<body>';
+        plainTextBody += 'Dear User,';
+        plainTextBody += '<p> Please find the '+fileName +' update status for the order '+poNumber+' below: </p>';
+        plainTextBody += '<p> </p><b> Records Successfully Created </b>';
+        plainTextBody += '<p> </p><table style="border: 1px solid black; border-collapse: collapse;"> ';
+        plainTextBody += '<tr>'; 
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> PO Number </b>' + '</th>' ;   
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> Data Load Date </b>' + '</th>';
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> Number of Records Created </b>' + '</th>' ;
+        plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;"> <b> Number of Records Errored </b>' + '</th>' ;
+        plainTextBody += '</tr>';
+        plainTextBody += '<tr>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(poNumber) + '</td>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(pDate) + '</td>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(pNum) + '</td>';
+        plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' + string.valueof(peNum) + '</td>';
+        plainTextBody += '</tr>';
+        plainTextBody += '</table>';
+        
+        
+        if(!errorsum.isEmpty()) {
+            
+            plainTextBody += '<p> </p>';
+            plainTextBody += '<b> Load Errors </b> <p> </p>';
+            plainTextBody += '<table style="border: 1px solid black; border-collapse: collapse;">';
+            //          PlainTextBody += '<tr> <th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Article' + '</th>';
+            //          PlainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Stock Source' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'Error Msg' + '</th>';
+            plainTextBody += '<th style="border: 1px solid black; border-collapse: collapse; background-color:lightgray; padding: 15px;">' + 'No.of Errors' + '</th>';
+            plainTextBody += '</tr>';
+            
+            for (AggregateResult xx : errorsum) {
+                plainTextBody += '<tr>';
+                //          PlainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Article_Number__c ) + '</td>';
+                //              PlainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.Stock_Source__c ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +string.valueof( xx.get('err') ) + '</td>';
+                plainTextBody += '<td style="border: 1px solid black; border-collapse: collapse; padding: 15px;">' +xx.get('a') + '</td>';
+                plainTextBody += '</tr>';
+            }
+            plainTextBody += '</table>';
+        }  else {
+            plainTextBody += '<p> Currently there are zero errors present in system. </p>';
+        }
+        plainTextBody += '<p> All errors will be corrected by IT Support. </p>';
+        plainTextBody += '<p> In the event errors are not corrected, please raise an Servicewow Incident and include the information detailed above. </p>';
+        plainTextBody += '<p> </p> <p> </p> Regards, <P>Cloud Service & Delivery Team</p>';
+        
+        plainTextBody += '<body>';
+        plainTextBody += '</html>';
+        
+        //message.SetToAddresses(toadd);
+        message.setToAddresses(emails);
+        message.SetSubject(subject);
+        //message.SetPlainTextBody(plainTextBody);
+        message.setHtmlBody(plainTextBody);
+        mails.add(message);
+        Messaging.sendEmail(mails);
+    }
+    
+}
